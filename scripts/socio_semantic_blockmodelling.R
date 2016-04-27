@@ -4,27 +4,18 @@ require(igraph)
 require(fpc)
 require(psych)
 
-getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigma1, sigma2, numClusters=NULL) {
+getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigmaNetSim, sigmaNonNetSim, numClusters=NULL) {
   
   if (is.null(E(network)$weight)) {
     
     E(network)$weight <- 1
   }
   
-  
-  if (is.null(userSimMatrix)) {
-    
-    print("create user models")
-    userModels <- lapply(V(network)$label, getUserModelHSHG, postData, network, minTime, maxTime)
-    save(userModels, file="user_models.Rdata")
-    
-    print("compute similarity matrix")
-    userSimMatrix <- getUserSimilarityMatrix(userModels, threadSimMatrix, 1, 1, 1)
-    save(userSimMatrix, file="similarities.Rdata")  
-  }
+  userRegeSim <- REGE.for(get.adjacency(network, sparse = FALSE))$E
+  userSim <- (sigmaNetSim * userRegeSim + sigmaNonNetSim * nonNetworkSimilarity) / (sigmaNetSim + sigmaNonNetsim)
   
   print("fit blockmodel")
-  d <- as.dist(1 - userSimMatrix)
+  d <- as.dist(1 - userSim)
   h <- hclust(d, method = "ward.D")
   
   if (is.null(numClusters)) {
@@ -34,14 +25,7 @@ getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigma1, si
   }
   
   part <- cutree(h, numClusters)
-  #   partMapped <- sapply(V(network)$label, function(nodeLabel) {
-  #     
-  #     simRow <- which(rownames(sim) == nodeLabel)
-  #     
-  #     ifelse((length(simRow) > 0), part[simRow], (max(part) + 1))
-  #   })
   
-  # isolated nodes should not contribute to the denstity
   nodesConnected <- length(which(igraph::degree(network) > 0))
   dens <- length(E(network)) / (nodesConnected * (nodesConnected - 1))
   crit.fun(get.adjacency(network, sparse=FALSE), part, approach="bin", blocks=c("null","reg"), blockWeights=c(null=1,reg=dens/(1-dens)), norm=TRUE)
