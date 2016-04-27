@@ -2,56 +2,15 @@ require(blockmodeling)
 require(sna)
 require(igraph)
 require(fpc)
+require(psych)
 
-source("semantic_similarity.R")
-source("create_user_model.R")
-
-
-
-getUserSimilarityMatrix <- function(userModels, threadSimMatrix, c1, c2, c3, inactives=NULL) {
-  
-  simMat <- matrix(1, nrow=length(userModels), ncol=length(userModels))
-  
-  userIds <- c()
-  #maxReach <- getMaxInOutReach(userModels)
-  
-  usersToCheck <- which(!(1:length(userModels) %in% inactives)) # only similarities of active users have to be computed. Similarity is 1 for all others.
-  print(paste("getSimilarityMatrix - ", length(userModels), "users", length(usersToCheck), "active."))
-  sapply(1:(length(usersToCheck) - 1), function(a) {
-    i <- usersToCheck[a]
-    
-    sapply((a + 1):length(usersToCheck), function(b) {
-      
-      j <- usersToCheck[b]
-      
-      forumVec1 <- append(userModels[[i]]$forums_hs, userModels[[i]]$forums_hg)
-      forumVec2 <- append(userModels[[j]]$forums_hs, userModels[[j]]$forums_hg)
-      
-      forumSim <- 1 #getSimilaritySubforumVector(forumVec1, forumVec2)   !!! Only to speed up the calculation.
-      #wordSim <- getSimilarityWordVector(wordVec1, wordVec2)
-      wordSim <- (getSimilarityByMatrix(userModels[[i]]$threads_hs, userModels[[j]]$threads_hs, threadSimMatrix)
-                  + getSimilarityByMatrix(userModels[[i]]$threads_hg, userModels[[j]]$threads_hg, threadSimMatrix)) / 2
-      ioSim <- 1 #getSimilarityIO(userModels[[i]]$inreach, userModels[[j]]$inreach, !!! Only to speed up the calculation.
-      # userModels[[i]]$outreach, userModels[[j]]$outreach)
-      #print(paste("i=", i, "j=", j, " forumSim=", forumSim, " wordSim=", wordSim, " ioSim=", ioSim))
-      
-      simMat[j,i] <<- (c1 * forumSim + c2 * wordSim + c3 * ioSim) / (c1 + c2 + c3)
-      #simMat[j,i] <<- (c1 * forumSim + c3 * ioSim) / (c1 + c3)
-    })
-  })
-  userIds <- sapply(userModels, function(model) model$user)
-  
-  rownames(simMat) <- userIds
-  colnames(simMat) <- userIds
-  simMat
-}
-
-getSemanticBlockmodel <- function(network, postData, threadSimMatrix, minTime, maxTime, numClusters=NULL, userSimMatrix=NULL) {
+getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigma1, sigma2, numClusters=NULL) {
   
   if (is.null(E(network)$weight)) {
     
     E(network)$weight <- 1
   }
+  
   
   if (is.null(userSimMatrix)) {
     
@@ -88,28 +47,41 @@ getSemanticBlockmodel <- function(network, postData, threadSimMatrix, minTime, m
   crit.fun(get.adjacency(network, sparse=FALSE), part, approach="bin", blocks=c("null","reg"), blockWeights=c(null=1,reg=dens/(1-dens)), norm=TRUE)
 }
 
+getSimilarityCorrelations <- function(structuralSimilarity, regularSimilarity, semanticSimilarity) {
+  
+  data <- data.frame(
+    "structural"=as.vector(structuralSimilarity[lower.tri(structuralSimilarity)]),
+    "regular"=as.vector(regularSimilarity[lower.tri(regularSimilarity)]),
+    "semantic"=as.vector(semanticSimilarity[lower.tri(semanticSimilarity)])
+  )
+  
+  corr.test(data, method="spearman")
+}
 
 start <- function() {
   
-  # Testrun
-  network <- read.graph("testgraph.gml", "gml")
-  postData <- read.csv2("../../network_extraction/post_tables/finance_001_featurised/finance_001_classified.csv")
-  threadSimMatrix <- readMM("../finance_001/thread_sem_matrix_wordnet.txt") #read.csv("../finance_001/thread_keywords_finance_001/calais_annotations/calais_tags_finance.csv")
-  dimNames <- read.table("../finance_001/thread_sem_sim_wordnet_dimnames.txt", as.is = "x")$x
+  network <- read.graph("example_net.gml", "gml")
+  toDelete <- which(igraph::degree(network) == 0)
+  network <- delete.vertices(network, toDelete)
+  userSemanticSimilarity <- read.csv("example_sem_sim.csv")
+  userRegularSimililarity <- REGE.for(get.adjacency(network, sparse=FALSE))$E
+  userStructuralSimilarity1 <- 1 - sedist(get.adjacency(network, sparse=FALSE), method="euclidean")  
   
-  rownames(threadSimMatrix) <- dimNames
-  colnames(threadSimMatrix) <- dimNames
+  # similarity correlations
+  simCor <- getSimilarityCorrelations(userStrSim, userRegSim, userSemSim)
+  print("similarity correlations")
+  print("Spearman correlations")
+  print(simCor$r)
+  print("p values")
+  print(simCor$p)
   
-  bm <- getSemanticBlockmodel(network, postData, threadSimMatrix, 0, 0, 10)
+  # --------------------------------------------------
+  # semantic similarity = 2, regular similarity = 1
+  # --------------------------------------------------
   
-  save(bm, file="blockmodel.Rdata")
+  bm <- getSocioSemanticBlockmodel(network, postData, threadSimMatrix, 0, 0, userSimMatrix=userRegSim)
+  
+  save(bm, file="example.Rdata")
   
   bm
-  
-  # TODO: 
-  ## More classified datasets
-  ## Try thread similartiy based on LSA and compare with wordnet approach
-  ## Determine time window size
-  ## Information diffusion by IM_slice1 X IM_slice2 X ... (implemented)
-  ## Combine semantic and structural blockmodels (implemented)
 }
