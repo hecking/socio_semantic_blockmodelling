@@ -1,6 +1,8 @@
 # socio_semantic_blockmodelling
 These scripts can be used for socio-semantic blockmodelling in social networks. 
 
+The code is likely to be changed. Example data and additional scripts will be available soon.
+
 If you use the software or the example datasets in your research, please cite:
 Tobias Hecking, Irene-Angelica Chounta, and H. Ulrich Hoppe. 2016. Investigating social and semantic user roles in MOOC discussion forums. In Proceedings of the Sixth International Conference on Learning Analytics & Knowledge (LAK '16). ACM, New York, NY, USA, 198-207. DOI=http://dx.doi.org/10.1145/2883851.2883924 
 
