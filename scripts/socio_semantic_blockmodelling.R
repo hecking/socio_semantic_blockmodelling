@@ -4,6 +4,13 @@ require(igraph)
 require(fpc)
 require(psych)
 
+################## Returns a blockmodel combining social and semantic similarity #############################
+# network: An igraph graph object
+# nonNetworkSimilarity: Matrix of similarities. Rows and columns correspond to the actors of the network.
+# sigmaNetSim: Weighting coefficient for social similarity.
+# signaNonnetSim: Weighting coefficient for (semantic) similarity of actors.
+# numClusters: Desired number of clusters. If NULL, the number of clusters will be determined automatically.
+##############################################################################################################
 getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigmaNetSim, sigmaNonNetSim, numClusters=NULL) {
   
   if (is.null(E(network)$weight)) {
@@ -12,7 +19,7 @@ getSocioSemanticBlockmodel <- function(network, nonNetworkSimilarity, sigmaNetSi
   }
   
   userRegeSim <- REGE.for(get.adjacency(network, sparse = FALSE))$E
-  userSim <- (sigmaNetSim * userRegeSim + sigmaNonNetSim * nonNetworkSimilarity) / (sigmaNetSim + sigmaNonNetsim)
+  userSim <- (sigmaNetSim * userRegeSim + sigmaNonNetSim * nonNetworkSimilarity) / (sigmaNetSim + sigmaNonNetSim)
   
   print("fit blockmodel")
   d <- as.dist(1 - userSim)
@@ -44,15 +51,16 @@ getSimilarityCorrelations <- function(structuralSimilarity, regularSimilarity, s
 
 start <- function() {
   
-  network <- read.graph("example_net.gml", "gml")
+  network <- read.graph("data/example_net.gml", "gml")
   toDelete <- which(igraph::degree(network) == 0)
   network <- delete.vertices(network, toDelete)
-  userSemanticSimilarity <- read.csv("example_sem_sim.csv")
+  
+  userSemanticSimilarity <- read.csv("data/semantic_similarity_users.csv", row.names="X")
   userRegularSimililarity <- REGE.for(get.adjacency(network, sparse=FALSE))$E
-  userStructuralSimilarity1 <- 1 - sedist(get.adjacency(network, sparse=FALSE), method="euclidean")  
+  userStructuralSimilarity <- 1 - sedist(get.adjacency(network, sparse=FALSE), method="euclidean")  
   
   # similarity correlations
-  simCor <- getSimilarityCorrelations(userStrSim, userRegSim, userSemSim)
+  simCor <- getSimilarityCorrelations(userStructuralSimilarity, userRegularSimililarity, userSemanticSimilarity)
   print("similarity correlations")
   print("Spearman correlations")
   print(simCor$r)
@@ -63,7 +71,7 @@ start <- function() {
   # semantic similarity = 2, regular similarity = 1
   # --------------------------------------------------
   
-  bm <- getSocioSemanticBlockmodel(network, postData, threadSimMatrix, 0, 0, userSimMatrix=userRegSim)
+  bm <- getSocioSemanticBlockmodel(network, userSemanticSimilarity, 1, 2)
   
   save(bm, file="example.Rdata")
   
